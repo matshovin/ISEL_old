@@ -157,6 +157,7 @@ void parseTomotorByteArray()
 {
     // parsing from interpArray to motorByteArray, 
     // Koder bare rett fram over til bits, men må finne ut om det trengs et nytt stepp/dir osv
+    // Arduino nuller ut bittene slik at man får pulser
     
     motorByteArray = new byte[interpArray.length];
 
@@ -174,21 +175,21 @@ void parseTomotorByteArray()
 
         x = (int)(interpArray[index][0] / stepSizeInMM);
         if ( x > xOld )
-            motorByteArray[index] = (byte)(motorByteArray[index] + 3); // X dir
+            motorByteArray[index] = (byte)(motorByteArray[index] + 3); // X step, dir=1
         else if ( x < xOld )
-            motorByteArray[index] = (byte)(motorByteArray[index] + 1); // X step
+            motorByteArray[index] = (byte)(motorByteArray[index] + 1); // X step, dir=0
 
         y = (int)(interpArray[index][1] / stepSizeInMM);
         if ( y > yOld )
-            motorByteArray[index] = (byte)(motorByteArray[index] + 12); // Y dir
+            motorByteArray[index] = (byte)(motorByteArray[index] + 12); // Y step, dir=1
         else if ( y < yOld )
-            motorByteArray[index] = (byte)(motorByteArray[index] + 4); // Y step
+            motorByteArray[index] = (byte)(motorByteArray[index] + 4); // Y step, dir=0
 
         z = (int)(interpArray[index][2] / stepSizeInMM);
         if ( z > zOld )
-            motorByteArray[index] = (byte)(motorByteArray[index] + 48); // Z dir
+            motorByteArray[index] = (byte)(motorByteArray[index] + 48); // Z step, dir=1
         else if ( z < zOld )
-            motorByteArray[index] = (byte)(motorByteArray[index] + 16); // Z step
+            motorByteArray[index] = (byte)(motorByteArray[index] + 16); // Z step, dir=0
             
         if ( (x>xOld+1) || (x<xOld-1) || (y>yOld+1) || (y<yOld-1) || (z>zOld+1) || (z<zOld-1))
             println("ERROR: speed to high for stepsize - line no: " + index);    
