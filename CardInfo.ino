@@ -1,3 +1,4 @@
+// grei å kjøre for å sjekke om alt virker
 #include <SPI.h>
 #include <SD.h>
 
