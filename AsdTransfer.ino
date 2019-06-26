@@ -1,3 +1,4 @@
+// Overfører direkte "1.stp" fra PC til Arduino SD
 #include <SPI.h>
 #include <SD.h>
 
