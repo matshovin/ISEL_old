@@ -1,6 +1,7 @@
-// G01 FILTER
-// Reads Fanuc G01-code, saves only (gPure) G01 move lines for use with INF4500 CNC controllers
+// G00/G01 FILTER
+// Reads Fanuc G00/G01-code, saves only (gPure) G01 move lines for use with ISEL CNC controller
 // Output format for all lines: G01 X16.227 Y13.53 Z-0.124 F42.0 
+// Input file can not contain G02/G03
 
 String gCodeFileInName = "../0.nc";
 String gCodeFileOutName = "../1.nc";
@@ -19,9 +20,9 @@ void setup()
             (gFanuc[i].indexOf("O")>-1) || (gFanuc[i].indexOf("G21")>-1) ||
             (gFanuc[i].indexOf("G54")>-1) || (gFanuc[i].indexOf("G28")>-1) || (gFanuc[i].indexOf("M")>-1) ||
             (gFanuc[i].indexOf("G49")>-1) || (gFanuc[i].indexOf("G43")>-1) || (gFanuc[i].length()<2) )
-            ;
-        else // motion command
-        {
+            ; // Ikke G00/G01 bevegelse linje - overfører ikke linjen
+        else 
+        {   // G00/G01 bevegelse linje - overfører linjen
             gPure[indexPure] = gFanuc[i];
             indexPure++;
         }
@@ -32,9 +33,9 @@ void setup()
 
     int numbOfmotionLines = indexPure;
             
-    println(numbOfmotionLines + " lines of gPure G01 motion");        
+    println(numbOfmotionLines + " lines of gPure G00/G01 motion");        
 
-    // Making new short String array with empty indexes removed from gPure
+    // Making new short String array with empty tailing indexes removed from gPure for å kunne bruke "saveStrings"
     String[] gPureshort = new String[numbOfmotionLines];
     for (int i=0; i<numbOfmotionLines; i++)
        gPureshort[i] = gPure[i];
@@ -44,7 +45,7 @@ void setup()
     double z=0;
     double f=1;
     
-    double maxF = 0;
+    double maxF = 0; // vil finne maxF
 
     for (int i=0; i<gPureshort.length; i++)
     {
@@ -66,7 +67,7 @@ void setup()
         if ( f > maxF)
             maxF = f;
 
-        gPureshort[i] = "G01 X" + x + " Y" + y + " Z" + z + " F" + f;
+        gPureshort[i] = "G01 X" + x + " Y" + y + " Z" + z + " F" + f; // denne lagres til fil
     }
 
     saveStrings(gCodeFileOutName, gPureshort);
