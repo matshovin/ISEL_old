@@ -16,11 +16,11 @@ byte[] motorByteArray;                  // Motor control byte,
 
 double stepFrequency = 1500.0;          // loop frequency in Arduino (Hz)
                                    
-double numbOfMicrostep = 8.0;                       // Can be set on EasyDriver card                         
-double stepSizeInMM = 2.5/(200.0*numbOfMicrostep);  // Screw pitch (mm/revolution) / 
-                                                    // (motor step per revolution * numbOfMicrostep) (0.001)
+double numbOfMicrostep = 4.0;                       // Can be set on motor driver (org8)                         
+double stepSizeInMM = 4/(200.0*numbOfMicrostep);  // Screw pitch (mm/revolution) / 
+                                                    // (motor step per revolution * numbOfMicrostep) (0.005) (org 2.5)
 
-                                        // Max possible linear speed = stepFrequency * stepSizeInMM
+                                        // Max possible linear speed = stepFrequency * stepSizeInMM - 7.5mm/sec
                                         // Motor rotation speed = stepFrequency / (numbOfMicrostep * 200)
 String gCodeFileName = "../1.nc";
 String stepFileName = "../1.stp";
@@ -42,11 +42,11 @@ void setup()
     parseToInterpArray();
     parseTomotorByteArray();  
 
-    //printgLineArray();
-    //printInterpArray();
-    //printMotorByteArray();
-    printEtc(74763,74765);
-    printgLineArray(0,3);
+    //printgLineArray(); // debug
+    //printInterpArray(); // debug
+    //printMotorByteArray(); // debug
+    printEtc(74763,74765); // debug
+    printgLineArray(0,3); // debug
     
     saveBytes(stepFileName, motorByteArray);
     println("File: " + stepFileName + " saved");
@@ -56,7 +56,7 @@ void setup()
 //***********************************************************************
 void readAndParseGcodeFileTo_gLineArray()
 {
-    double maxF = 0; // Bare en sikkerhets skjekk
+    double maxF = 0; // Vil finne maxF, bare en sikkerhets skjekk
     
     String[] rawS = loadStrings(gCodeFileName);
     println(rawS.length + " lines read from file: " + gCodeFileName);
@@ -65,7 +65,7 @@ void readAndParseGcodeFileTo_gLineArray()
 
     double lineLengthMM; // line length for each G01 line in mm
 
-    for (int L=0; L < rawS.length; L++)
+    for (int L=0; L < rawS.length; L++) // løper alle linjer i "1.nc"
     {
         gLineArray[L][0] = (finnTallVerdiFraLinje("X", rawS[L]) ); // setter inn X verdi
         gLineArray[L][1] = (finnTallVerdiFraLinje("Y", rawS[L]) ); // setter inn Y verdi
@@ -100,27 +100,27 @@ void parseToInterpArray()
 {
     // parsing from gLineArray (short array) to interpArray (long array)
     
-    int gCodeLineNo = 0;
+    int gCodeLineNo = 0; // (første linjesegment)
 
     // running over each index in interpArray (long array)
     for (int index=0; index<interpArray.length; index++)
     {
         double currentTime = index * (1.0/stepFrequency);
 
-        if (gCodeLineNo == 0)
+        if (gCodeLineNo == 0) // (første linjesegment)
         {
             double[] startCoord = {(double)0, (double)0, (double)0};
             interpArray[index] = interpolateSinglePoint(currentTime,
                                startCoord, 0,
                                gLineArray[gCodeLineNo], gLineArray[gCodeLineNo][3]);
-        } else
+        } else // (gjeldende linjesegment current punkt ligger på underveis)
         {
             interpArray[index] = interpolateSinglePoint(currentTime,
                                gLineArray[gCodeLineNo-1], gLineArray[gCodeLineNo-1][3],
                                gLineArray[gCodeLineNo], gLineArray[gCodeLineNo][3]);
         }
         
-        while (currentTime > gLineArray[gCodeLineNo][3])
+        while (currentTime > gLineArray[gCodeLineNo][3]) // laster inn ny gCodeLinje (linjesegment)
             gCodeLineNo++;
     }
 }
@@ -155,7 +155,9 @@ double[] interpolateSinglePoint(double currentTime,double[] startCoord, double s
 //***********************************************************************
 void parseTomotorByteArray()
 {
-    // parsing from interpArray to motorByteArray
+    // parsing from interpArray to motorByteArray, 
+    // Koder bare rett fram over til bits, men må finne ut om det trengs et nytt stepp/dir osv
+    
     motorByteArray = new byte[interpArray.length];
 
     // current number of steps
@@ -172,21 +174,21 @@ void parseTomotorByteArray()
 
         x = (int)(interpArray[index][0] / stepSizeInMM);
         if ( x > xOld )
-            motorByteArray[index] = (byte)(motorByteArray[index] + 3);
+            motorByteArray[index] = (byte)(motorByteArray[index] + 3); // X dir
         else if ( x < xOld )
-            motorByteArray[index] = (byte)(motorByteArray[index] + 1);
+            motorByteArray[index] = (byte)(motorByteArray[index] + 1); // X step
 
         y = (int)(interpArray[index][1] / stepSizeInMM);
         if ( y > yOld )
-            motorByteArray[index] = (byte)(motorByteArray[index] + 12);
+            motorByteArray[index] = (byte)(motorByteArray[index] + 12); // Y dir
         else if ( y < yOld )
-            motorByteArray[index] = (byte)(motorByteArray[index] + 4);
+            motorByteArray[index] = (byte)(motorByteArray[index] + 4); // Y step
 
         z = (int)(interpArray[index][2] / stepSizeInMM);
         if ( z > zOld )
-            motorByteArray[index] = (byte)(motorByteArray[index] + 48);
+            motorByteArray[index] = (byte)(motorByteArray[index] + 48); // Z dir
         else if ( z < zOld )
-            motorByteArray[index] = (byte)(motorByteArray[index] + 16);
+            motorByteArray[index] = (byte)(motorByteArray[index] + 16); // Z step
             
         if ( (x>xOld+1) || (x<xOld-1) || (y>yOld+1) || (y<yOld-1) || (z>zOld+1) || (z<zOld-1))
             println("ERROR: speed to high for stepsize - line no: " + index);    
