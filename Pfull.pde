@@ -4,7 +4,7 @@
 // 4)    Declare "interpArray" (interpolated XYZ values (mm)), format: X Y Z 
 // 5)    Iterate all CNC steps and find corresponding G line, generate line equation and interpolation point
 // 6)    Declare "motorByteArray" and generate motor control bytes from all interpolation points in "interpArray"
-// 7)    Save motorByteArray to file "0.stp"
+// 7)    Save motorByteArray to file "1.stp"
 
 // G.code file format for all lines:  G01 X1.232 Y100.0 Z-33.12 F15  (X,Y,Z in mm, F in mm/sec)
 // Tool tip is manually located i 0,0,0 (WCS) first
