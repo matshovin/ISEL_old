@@ -1,123 +1,118 @@
-// 1)    Filtrer fra fil inn i gPureshort G01 kode String array
-// 2)    Parse the string array gPureshort to "gLineArray", format: X Y Z T, line end positions (mm) and line endtime (sec)
+// 1)    Filtrer fra fil inn i gCodeArrayOnlyLinesOfG01, G01 kode String array
+// 2)    Parse the string array gCodeArrayOnlyLinesOfG01 to "lineArrayXYZT", format: X Y Z T, line end positions (mm) and line endtime (sec)
 // 3)    Calculate numb of CNC steps from max T
-// 4)    Declare "interpArray" (interpolated XYZ values (mm)), format: X Y Z 
+// 4)    Declare "interpolPointArray" (interpolated XYZ values (mm)), format: X Y Z 
 // 5)    Iterate all CNC steps and find corresponding G line, generate line equation and interpolation point
-// 6)    Declare "motorByteArray" and generate motor control bytes from all interpolation points in "interpArray"
+// 6)    Declare "motorByteArray" and generate motor control bytes from all interpolation points in "interpolPointArray"
 // 7)    Save motorByteArray to file "1.stp"
 
 // G.code file format for all lines:  G01 X1.232 Y100.0 Z-33.12 F15  (X,Y,Z in mm, F in mm/sec)
 // Tool tip is manually located i 0,0,0 (WCS) first
 
-String[] gPureshort;                    // Ren G01 G code filtrert fra fil
-double[][] gLineArray;                  // [G line no][X Y Z endtime] (mm)(sec)
-double[][] interpArray;                 // [step no][X Y Z] (mm)
+String[] gCodeArrayOnlyLinesOfG01;      // Ren G01 G code filtrert fra fil
+double[][] lineArrayXYZT;               // [Line no][X Y Z endtime] (mm)(sec)
+double[][] interpolPointArray;          // [Step no][X Y Z] (mm)
 byte[] motorByteArray;                  // Motor control byte, 
                                         // bit format: [notUsed notUsed dirZ stepZ dirY stepY dirX stepX]
 
 double stepFrequency = 1500.0;          // loop frequency in Arduino (Hz)
                                    
 double numbOfMicrostep = 4.0;                       // Can be set on motor driver (org8)                         
-double stepSizeInMM = 4/(200.0*numbOfMicrostep);  // Screw pitch (mm/revolution) / 
+double stepSizeInMM = 4/(200.0*numbOfMicrostep);    // Screw pitch (mm/revolution) / 
                                                     // (motor step per revolution * numbOfMicrostep) (0.005) (org 2.5)
 
                                         // Max possible linear speed = stepFrequency * stepSizeInMM - 7.5mm/sec
                                         // Motor rotation speed = stepFrequency / (numbOfMicrostep * 200)
 String gCodeFileName = "../NC/0.nc";
-float speedScale = 0.0003; // typisk fra mm/min i F360 til mm/sec som er formatet i ROBIN CNC driver
+float speedScale = 0.0003;              // typisk fra mm/min i F360 til mm/sec som er formatet i ROBIN CNC driver
 
 void setup()
 {
-    filtrerFilTilGcodeArrayAvRenG01(gCodeFileName);
-  
-    readAndParseGcodeFileTo_gLineArray(); // X Y Z T
+    lesFil_FiltrerTil_gCodeArrayOnlyLinesOfG01(gCodeFileName);
+    
+    parse_gCodeArrayOnlyLinesOfG01_til_lineArrayXYZT(); 
 
-    int totalNoOfSteps = (int)( gLineArray[gLineArray.length-1][3] * stepFrequency ); 
+    int totalNoOfSteps = (int)( lineArrayXYZT[lineArrayXYZT.length-1][3] * stepFrequency ); 
     println("Total no of steps = " + totalNoOfSteps);    
-    System.out.printf("Total run time = %.2f sec / %.2f min \n", gLineArray[gLineArray.length-1][3], gLineArray[gLineArray.length-1][3]/60.0);
+    System.out.printf("Total run time = %.2f sec / %.2f min \n", lineArrayXYZT[lineArrayXYZT.length-1][3], lineArrayXYZT[lineArrayXYZT.length-1][3]/60.0);
     println("Step size = " + stepSizeInMM + " (mm)");
     println("Step frequency = " + stepFrequency + " (Hz)");
     println("Max possible linear motion speed = " + (stepFrequency * stepSizeInMM) + " (mm/sec)");
     println("Max possible motor rotational speed = " + stepFrequency / (numbOfMicrostep * 200.0) + " (rev/sec)");
 
-    interpArray = new double[totalNoOfSteps][3];
+    interpolPointArray = new double[totalNoOfSteps][3];
 
-    parseToInterpArray();
-    parseTomotorByteArray();  
+    parse_lineArrayXYZT_to_interpolPointArray();
+    parse_interpolPointArray_to_motorByteArray();  
 
-    //printgLineArray(); // debug
-    //printInterpArray(); // debug
+    //printlineArrayXYZT(); // debug
+    //printinterpolPointArray(); // debug
     //printMotorByteArray(); // debug
-    printEtc(74763,74765); // debug
-    printgLineArray(0,3); // debug
+    printEtc(111750,111780); // debug
+    printlineArrayXYZT(0,3); // debug
 }
 
 //***********************************************************************
 //***********************************************************************
-void readAndParseGcodeFileTo_gLineArray()
+void parse_gCodeArrayOnlyLinesOfG01_til_lineArrayXYZT()
 {
-    double maxF = 0; // Vil finne maxF, bare en sikkerhets skjekk
-
-    gLineArray = new double[gPureshort.length][4];
+    lineArrayXYZT = new double[gCodeArrayOnlyLinesOfG01.length][4];
 
     double lineLengthMM; // line length for each G01 line in mm
 
-    for (int L=0; L < gPureshort.length; L++) // løper alle linjer i "1.nc"
+    for (int L=0; L < gCodeArrayOnlyLinesOfG01.length; L++) // løper alle linjer i "1.nc"
     {
-        gLineArray[L][0] = (finnTallVerdiFraLinje("X", gPureshort[L]) ); // setter inn X verdi
-        gLineArray[L][1] = (finnTallVerdiFraLinje("Y", gPureshort[L]) ); // setter inn Y verdi
-        gLineArray[L][2] = (finnTallVerdiFraLinje("Z", gPureshort[L]) ); // setter inn Z verdi
+        lineArrayXYZT[L][0] = (finnTallVerdiFraLinje("X", gCodeArrayOnlyLinesOfG01[L]) ); // setter inn X verdi
+        lineArrayXYZT[L][1] = (finnTallVerdiFraLinje("Y", gCodeArrayOnlyLinesOfG01[L]) ); // setter inn Y verdi
+        lineArrayXYZT[L][2] = (finnTallVerdiFraLinje("Z", gCodeArrayOnlyLinesOfG01[L]) ); // setter inn Z verdi
 
-        double F = finnTallVerdiFraLinje("F", gPureshort[L]); // hastighet i mm/sec
-        if (F>maxF)
-            maxF = F;
+        double F = finnTallVerdiFraLinje("F", gCodeArrayOnlyLinesOfG01[L]); // hastighet i mm/sec
 
         if (L == 0) // maskin står i 0,0,0  forst
         {
-            lineLengthMM = Math.sqrt( (gLineArray[L][0] - 0) * (gLineArray[L][0] - 0) +
-                (gLineArray[L][1] - 0) * (gLineArray[L][1] - 0) +
-                (gLineArray[L][2] - 0) * (gLineArray[L][2] - 0) );
+            lineLengthMM = Math.sqrt( (lineArrayXYZT[L][0] - 0) * (lineArrayXYZT[L][0] - 0) +
+                (lineArrayXYZT[L][1] - 0) * (lineArrayXYZT[L][1] - 0) +
+                (lineArrayXYZT[L][2] - 0) * (lineArrayXYZT[L][2] - 0) );
 
-            gLineArray[L][3] = lineLengthMM / F; // setter inn slutt tid
+            lineArrayXYZT[L][3] = lineLengthMM / F; // setter inn slutt tid
         } else
         {
             lineLengthMM = Math.sqrt(
-                (gLineArray[L][0] - gLineArray[L-1][0]) * (gLineArray[L][0] - gLineArray[L-1][0]) +
-                (gLineArray[L][1] - gLineArray[L-1][1]) * (gLineArray[L][1] - gLineArray[L-1][1]) +
-                (gLineArray[L][2] - gLineArray[L-1][2]) * (gLineArray[L][2] - gLineArray[L-1][2]) );
+                (lineArrayXYZT[L][0] - lineArrayXYZT[L-1][0]) * (lineArrayXYZT[L][0] - lineArrayXYZT[L-1][0]) +
+                (lineArrayXYZT[L][1] - lineArrayXYZT[L-1][1]) * (lineArrayXYZT[L][1] - lineArrayXYZT[L-1][1]) +
+                (lineArrayXYZT[L][2] - lineArrayXYZT[L-1][2]) * (lineArrayXYZT[L][2] - lineArrayXYZT[L-1][2]) );
 
-            gLineArray[L][3] = (lineLengthMM / F) + gLineArray[L-1][3]; // setter inn slutt tid
+            lineArrayXYZT[L][3] = (lineLengthMM / F) + lineArrayXYZT[L-1][3]; // setter inn slutt tid
         }
     }   
-    System.out.printf("Max F found in file =  %.2f mm/sec \n", maxF);
 }
 
 //***********************************************************************
-void parseToInterpArray()
+void parse_lineArrayXYZT_to_interpolPointArray()
 {
-    // parsing from gLineArray (short array) to interpArray (long array)
+    // parsing from lineArrayXYZT (short array) to interpolPointArray (long array)
     
     int gCodeLineNo = 0; // (første linjesegment)
 
-    // running over each index in interpArray (long array)
-    for (int index=0; index<interpArray.length; index++)
+    // running over each index in interpolPointArray (long array)
+    for (int index=0; index<interpolPointArray.length; index++)
     {
         double currentTime = index * (1.0/stepFrequency);
 
         if (gCodeLineNo == 0) // (første linjesegment)
         {
             double[] startCoord = {(double)0, (double)0, (double)0};
-            interpArray[index] = interpolateSinglePoint(currentTime,
+            interpolPointArray[index] = interpolateSinglePoint(currentTime,
                                startCoord, 0,
-                               gLineArray[gCodeLineNo], gLineArray[gCodeLineNo][3]);
+                               lineArrayXYZT[gCodeLineNo], lineArrayXYZT[gCodeLineNo][3]);
         } else // (gjeldende linjesegment current punkt ligger på underveis)
         {
-            interpArray[index] = interpolateSinglePoint(currentTime,
-                               gLineArray[gCodeLineNo-1], gLineArray[gCodeLineNo-1][3],
-                               gLineArray[gCodeLineNo], gLineArray[gCodeLineNo][3]);
+            interpolPointArray[index] = interpolateSinglePoint(currentTime,
+                               lineArrayXYZT[gCodeLineNo-1], lineArrayXYZT[gCodeLineNo-1][3],
+                               lineArrayXYZT[gCodeLineNo], lineArrayXYZT[gCodeLineNo][3]);
         }
         
-        while (currentTime > gLineArray[gCodeLineNo][3]) // laster inn ny gCodeLinje (linjesegment)
+        while (currentTime > lineArrayXYZT[gCodeLineNo][3]) // laster inn ny gCodeLinje (linjesegment)
             gCodeLineNo++;
     }
 }
@@ -150,13 +145,13 @@ double[] interpolateSinglePoint(double currentTime,double[] startCoord, double s
 }
 
 //***********************************************************************
-void parseTomotorByteArray()
+void parse_interpolPointArray_to_motorByteArray()
 {
-    // parsing from interpArray to motorByteArray, 
+    // parsing from interpolPointArray to motorByteArray, 
     // Koder bare rett fram over til bits, men må finne ut om det trengs et nytt stepp/dir osv
     // Arduino nuller ut bittene slik at man får pulser
     
-    motorByteArray = new byte[interpArray.length];
+    motorByteArray = new byte[interpolPointArray.length];
 
     // current number of steps
     int x, y, z;
@@ -166,23 +161,23 @@ void parseTomotorByteArray()
     int yOld = 0;
     int zOld = 0;
 
-    for (int index=0; index<interpArray.length; index++)
+    for (int index=0; index<interpolPointArray.length; index++)
     {
         motorByteArray[index] = 0;
 
-        x = (int)(interpArray[index][0] / stepSizeInMM);
+        x = (int)(interpolPointArray[index][0] / stepSizeInMM);
         if ( x > xOld )
             motorByteArray[index] = (byte)(motorByteArray[index] + 3); // X step, dir=1
         else if ( x < xOld )
             motorByteArray[index] = (byte)(motorByteArray[index] + 1); // X step, dir=0
 
-        y = (int)(interpArray[index][1] / stepSizeInMM);
+        y = (int)(interpolPointArray[index][1] / stepSizeInMM);
         if ( y > yOld )
             motorByteArray[index] = (byte)(motorByteArray[index] + 12); // Y step, dir=1
         else if ( y < yOld )
             motorByteArray[index] = (byte)(motorByteArray[index] + 4); // Y step, dir=0
 
-        z = (int)(interpArray[index][2] / stepSizeInMM);
+        z = (int)(interpolPointArray[index][2] / stepSizeInMM);
         if ( z > zOld )
             motorByteArray[index] = (byte)(motorByteArray[index] + 48); // Z step, dir=1
         else if ( z < zOld )
@@ -231,13 +226,14 @@ double finnTallVerdiFraLinjeRaaFil(String parameterNavn, String linje)
 //**************************************************************************************************
 //**************************************************************************************************
 
-void filtrerFilTilGcodeArrayAvRenG01(String gCodeFileInName)
+void lesFil_FiltrerTil_gCodeArrayOnlyLinesOfG01(String gCodeFileInName)
 {
     String[] gFanuc = loadStrings(gCodeFileInName);
-    println(gFanuc.length + " lines of Fanuc G code");
+    println("Lest: " + gFanuc.length + " lines of raw Fanuc G code fra fil: " + gCodeFileInName);
     
     String[] gPure = new String[gFanuc.length];
 
+    int antG023 = 0;
     int indexPure = 0;
     for (int i=0; i<gFanuc.length; i++)
     {
@@ -253,17 +249,22 @@ void filtrerFilTilGcodeArrayAvRenG01(String gCodeFileInName)
         }
 
         if ( (gFanuc[i].indexOf("G02")>-1) || (gFanuc[i].indexOf("G03")>-1) )
+        {
             println("****************** ERROR G02/3 found");
+            antG023++;
+        }
+ 
     }
+    println("Anall G02/G03 linjer funnet: " + antG023 + " (0 er nødvendig)");
 
     int numbOfmotionLines = indexPure;
             
-    println(numbOfmotionLines + " lines of gPure G00/G01 motion");        
+    println("Antall  G00/G01 linjer funnet (G00 er konvertert til G01): " + numbOfmotionLines);        
 
     // Making new short String array with empty tailing indexes removed from gPure for å kunne bruke "saveStrings"
-    gPureshort = new String[numbOfmotionLines];
+    gCodeArrayOnlyLinesOfG01 = new String[numbOfmotionLines];
     for (int i=0; i<numbOfmotionLines; i++)
-       gPureshort[i] = gPure[i];
+       gCodeArrayOnlyLinesOfG01[i] = gPure[i];
 
     double x=0;
     double y=0;
@@ -272,19 +273,19 @@ void filtrerFilTilGcodeArrayAvRenG01(String gCodeFileInName)
     
     double maxF = 0; // vil finne maxF
 
-    for (int i=0; i<gPureshort.length; i++)
+    for (int i=0; i<gCodeArrayOnlyLinesOfG01.length; i++)
     {
-        if (gPureshort[i].indexOf("X")>-1)
-            x = finnTallVerdiFraLinjeRaaFil("X", gPureshort[i]);
+        if (gCodeArrayOnlyLinesOfG01[i].indexOf("X")>-1)
+            x = finnTallVerdiFraLinjeRaaFil("X", gCodeArrayOnlyLinesOfG01[i]);
 
-        if (gPureshort[i].indexOf("Y")>-1)
-            y = finnTallVerdiFraLinjeRaaFil("Y", gPureshort[i]);
+        if (gCodeArrayOnlyLinesOfG01[i].indexOf("Y")>-1)
+            y = finnTallVerdiFraLinjeRaaFil("Y", gCodeArrayOnlyLinesOfG01[i]);
 
-        if (gPureshort[i].indexOf("Z")>-1)
-            z = finnTallVerdiFraLinjeRaaFil("Z", gPureshort[i]);
+        if (gCodeArrayOnlyLinesOfG01[i].indexOf("Z")>-1)
+            z = finnTallVerdiFraLinjeRaaFil("Z", gCodeArrayOnlyLinesOfG01[i]);
 
-        if (gPureshort[i].indexOf("F")>-1)
-            f = finnTallVerdiFraLinjeRaaFil("F", gPureshort[i]) * speedScale;
+        if (gCodeArrayOnlyLinesOfG01[i].indexOf("F")>-1)
+            f = finnTallVerdiFraLinjeRaaFil("F", gCodeArrayOnlyLinesOfG01[i]) * speedScale;
 
         if (f<0.01)
             f=1;
@@ -292,8 +293,9 @@ void filtrerFilTilGcodeArrayAvRenG01(String gCodeFileInName)
         if ( f > maxF)
             maxF = f;
 
-        gPureshort[i] = "G01 X" + x + " Y" + y + " Z" + z + " F" + f; // denne lagres til fil
+        gCodeArrayOnlyLinesOfG01[i] = "G01 X" + x + " Y" + y + " Z" + z + " F" + f; // denne kan evt. lagres til fil
     }
+    System.out.printf("Max F (skalert) =  %.2f mm/sec \n", maxF);
 }
 
 //***********************************************************************
@@ -309,9 +311,9 @@ void printEtc(int star, int end)
     for (int i=star; i<end; i++)
     {
         print( "step no " + i + ", time: " + r(i/stepFrequency) );
-        print( "  " + r(interpArray[i][0]) );
-        print( " " + r(interpArray[i][1]) );
-        print( " " + r(interpArray[i][2]) );
+        print( "  " + r(interpolPointArray[i][0]) );
+        print( " " + r(interpolPointArray[i][1]) );
+        print( " " + r(interpolPointArray[i][2]) );
         println( "  " + binary(motorByteArray[i]) );
     }
     println(" ");    
@@ -323,14 +325,14 @@ String r(double d)
     return s.substring(0,6);
 }
 
-void printgLineArray(int star, int end)
+void printlineArrayXYZT(int star, int end)
 {
     for (int i=star; i<end; i++)
     {
-        print( r(gLineArray[i][0]) + " ");
-        print( r(gLineArray[i][1]) + " ");
-        print( r(gLineArray[i][2]) + "  ");
-        println( r(gLineArray[i][3]) );
+        print( r(lineArrayXYZT[i][0]) + " ");
+        print( r(lineArrayXYZT[i][1]) + " ");
+        print( r(lineArrayXYZT[i][2]) + "  ");
+        println( r(lineArrayXYZT[i][3]) );
     }
     println(" ");    
 }
