@@ -1,4 +1,5 @@
 // ISEL FLATCOM FB2
+// enkel test med riktige verdier på retninger
 
 int T = 500;  // uSec 
 
