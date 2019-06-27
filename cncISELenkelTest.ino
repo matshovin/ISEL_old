@@ -1,4 +1,4 @@
-// ISEL FLATCOM FB2
+// ISEL FLATCOM FB2 .... mega 2560
 // enkel test med riktige verdier på retninger
 
 int T = 500;  // uSec 
