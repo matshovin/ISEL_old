@@ -17,6 +17,7 @@ int stepPeriode = (long int)1000000/stepBaudRate - 8; // 8um delay mellom dir og
 
 void setup()
 {
+  // PORT D
   pinMode(2, OUTPUT); // X step/pulse
   digitalWrite(2, LOW);
   pinMode(3, OUTPUT); // X dir
@@ -32,14 +33,16 @@ void setup()
   pinMode(7, OUTPUT); // Z dir
   digitalWrite(7, LOW); // Z+
 
-  // Brytere kjøres rett ut på pinne 2-7 når de aktiveres lav, alle leser samtidig i en byte PORT D
+  // PORT C
+  // Brytere kjøres rett ut på pinne 2-7 når de aktiveres lav, alle leses samtidig i en byte, PORT D
   pinMode(A0, INPUT_PULLUP);
   pinMode(A1, INPUT_PULLUP);
   pinMode(A2, INPUT_PULLUP);
   pinMode(A3, INPUT_PULLUP);
   pinMode(A4, INPUT_PULLUP);
   pinMode(A5, INPUT_PULLUP);
-   
+
+  // PORT B 
   pinMode(9, INPUT_PULLUP); // Start jobb
   pinMode(10, INPUT_PULLUP); // Stopp jobb
 
@@ -55,15 +58,15 @@ void loop()
     {
       byte s = myFile.read();
 
-      s = s<<2;
+      s = s<<2; // unngår å skrive over pin RX/TX
       s = 0b10100000^s; // retningsjustering, bitswapper Ydir og Zdir
       // Dir ut
-      PORTD = (s & 0b10101000) | (PORTD & 0b01010111); // unngaar aa skrive over Rx Tx
+      PORTD = (s & 0b10101000) | (PORTD & 0b01010111); // overfører og beholder opprinelige Rx,Tx, XYZ step verdier
       delayMicroseconds(8); // EasyDriver timing reqirements er 5us
       // Step ut
-      PORTD = (s & 0b01010100) | (PORTD & 0b10101011); // unngaar aa skrive over Rx Tx
+      PORTD = (s & 0b01010100) | (PORTD & 0b10101011); // overfører og beholder opprinelige Rx,Tx, XYZ dir verdier
     }
-    else // if not available new SD byte
+    else // if not new SD byte available 
     {
       isRunning = false;
       myFile.close();
@@ -83,18 +86,18 @@ void loop()
 
       stepDirUt = 0b10100000^stepDirUt; // retningsjustering, bitswapper Ydir og Zdir
       // Dir ut 
-      PORTD = (stepDirUt & 0b10101000) | (PORTD & 0b01010111); // unngaar aa skrive over Rx Tx
+      PORTD = (stepDirUt & 0b10101000) | (PORTD & 0b01010111); // overfører og beholder opprinelige Rx,Tx, XYZ step verdier
       delayMicroseconds(8); // EasyDriver timing reqirements er 5us
       // Step ut
-      PORTD = (stepDirUt & 0b01010100) | (PORTD & 0b10101011); // unngaar aa skrive over Rx Tx
+      PORTD = (stepDirUt & 0b01010100) | (PORTD & 0b10101011); // overfører og beholder opprinelige Rx,Tx, XYZ dir verdier
     }
   }
 
   // Leser alltid start / stop brytere
   byte swStartStop = ~PINB;  // omformer fra active low to active high
-  if ( swStartStop & 0b00000100 ) // Stop CNC run
+  if ( swStartStop & 0b00000100 ) // Stop CNC run (pin11)
     isRunning = false;
-  else if ( swStartStop & 0b00000010 ) // start CNC run
+  else if ( swStartStop & 0b00000010 ) // start CNC run (pin10)
     if (isRunning == false)  // initier SD
     {
       if (SD.begin(8))
