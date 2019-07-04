@@ -6,20 +6,18 @@
 File myFile;
 boolean isRunning = false;
 
-int ok= 400;
-
 void setup()
 {
   // Skrives ut alle på en gang for å spare tid
   pinMode(2, OUTPUT); // X step/pulse
   pinMode(3, OUTPUT); // X dir
-  digitalWrite(3, LOW); // X+
+  digitalWrite(3, LOW); // X-
   pinMode(4, OUTPUT); // Y step/pulse
   pinMode(5, OUTPUT); // Y dir
-  digitalWrite(5, LOW); // Y-
+  digitalWrite(5, LOW); // Y+
   pinMode(6, OUTPUT); // Z step/pulse
   pinMode(7, OUTPUT); // Z dir
-  digitalWrite(7, LOW); // Z-
+  digitalWrite(7, LOW); // Z+
 
   // Brytere kjøres rett ut på pinne 2-7 når de aktiveres lav
   pinMode(A0, INPUT_PULLUP);
@@ -48,9 +46,9 @@ void loop()
 
     // Dir forst ut grunnet EasyDriver timing reqirements
     // passer pa aa ikke skrive over Rx Tx
-ok=ok+4;
     // Dir ut 
     PORTD = (stepDirUt & 0b10101000) | (PORTD & 0b01010111);
+    delayMicroseconds(8);
     // Step ut
     PORTD = (stepDirUt & 0b01010100) | (PORTD & 0b10101011);
   }
@@ -80,6 +78,7 @@ ok=ok+4;
       s = s<<2;
       // Dir forst ut grunnet EasyDriver timing reqirements
       PORTD = (s & 0b10101000) | (PORTD & 0b01010111);
+      delayMicroseconds(8);
       // Step ut
       PORTD = (s & 0b01010100) | (PORTD & 0b10101011);
     }
@@ -90,7 +89,7 @@ ok=ok+4;
       Serial.println("NC run finish");
     }
   }
-//delay(33);
- delayMicroseconds(ok);
+//delay(333);
+ delayMicroseconds(300);
   PORTD = B10101011 & PORTD;  // nuller ut x,y,x step pins for å pulse
 }
